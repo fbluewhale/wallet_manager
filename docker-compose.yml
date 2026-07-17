@@ -1,0 +1,20 @@
+services:
+  wallet:
+    build:
+      context: ./wallet
+    ports:
+      - "${WALLET_PORT:-8000}:8000"
+    volumes:
+      - ./wallet:/app
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+      python manage.py runserver 0.0.0.0:8000"
+
+  third-party:
+    build:
+      context: ./third-party
+    ports:
+      - "${THIRD_PARTY_PORT:-8010}:8010"
+    volumes:
+      - ./third-party:/app
+    command: python app.py
