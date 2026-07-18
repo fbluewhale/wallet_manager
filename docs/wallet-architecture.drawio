@@ -1,18 +1,258 @@
-<mxfile host="app.diagrams.net" modified="2026-07-18T00:00:00.000Z" agent="Codex" version="24.7.17">
-  <diagram id="wallet-architecture" name="Wallet architecture">
-    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" page="1" pageWidth="1600" pageHeight="1000">
-      <root>
-        <mxCell id="0"/><mxCell id="1" parent="0"/>
-        <mxCell id="client" value="Client" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;" vertex="1" parent="1"><mxGeometry x="40" y="260" width="100" height="50" as="geometry"/></mxCell>
-        <mxCell id="api" value="Django API&#xa;Idempotency" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="210" y="250" width="130" height="70" as="geometry"/></mxCell>
-        <mxCell id="db" value="PostgreSQL&#xa;Wallets · withdrawals · ledger&#xa;idempotency · outbox" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="440" y="220" width="180" height="110" as="geometry"/></mxCell>
-        <mxCell id="beat" value="Celery Beat&#xa;dispatcher" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" vertex="1" parent="1"><mxGeometry x="220" y="100" width="130" height="60" as="geometry"/></mxCell>
-        <mxCell id="publisher" value="Outbox publisher" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" vertex="1" parent="1"><mxGeometry x="690" y="100" width="130" height="60" as="geometry"/></mxCell>
-        <mxCell id="redis" value="Redis / Celery" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="880" y="180" width="130" height="60" as="geometry"/></mxCell>
-        <mxCell id="worker" value="Celery worker&#xa;reserve → call → settle" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" vertex="1" parent="1"><mxGeometry x="710" y="300" width="150" height="70" as="geometry"/></mxCell>
-        <mxCell id="bank" value="Third-party bank&#xa;POST /" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="1030" y="310" width="130" height="60" as="geometry"/></mxCell>
-        <mxCell id="e1" edge="1" parent="1" source="client" target="api" style="endArrow=block;html=1;"/><mxCell id="e2" edge="1" parent="1" source="api" target="db" style="endArrow=block;html=1;"/><mxCell id="e3" edge="1" parent="1" source="beat" target="db" style="endArrow=block;html=1;"/><mxCell id="e4" edge="1" parent="1" source="db" target="publisher" style="endArrow=block;html=1;"/><mxCell id="e5" edge="1" parent="1" source="publisher" target="redis" style="endArrow=block;html=1;"/><mxCell id="e6" edge="1" parent="1" source="redis" target="worker" style="endArrow=block;html=1;"/><mxCell id="e7" edge="1" parent="1" source="worker" target="db" style="endArrow=block;html=1;"/><mxCell id="e8" edge="1" parent="1" source="worker" target="bank" style="endArrow=block;html=1;"/>
-      </root>
-    </mxGraphModel>
-  </diagram>
+<mxfile host="65bd71144e">
+    <diagram id="system-context" name="1. System Architecture">
+        <mxGraphModel dx="383" dy="271" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="Wallet Service — System Architecture" style="text;html=1;fontSize=24;fontStyle=1;align=left;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="30" width="500" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="client" value="Client&#xa;Idempotency-Key" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="280" width="150" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="api-zone" value="Django Application" style="swimlane;html=1;rounded=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="250" y="110" width="500" height="480" as="geometry"/>
+                </mxCell>
+                <mxCell id="api" value="REST API&#xa;views + serializers&#xa;validation + replay" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="api-zone" vertex="1">
+                    <mxGeometry x="30" y="70" width="160" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="services" value="Application Services&#xa;deposit · schedule&#xa;reserve · settle · retry" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="api-zone" vertex="1">
+                    <mxGeometry x="270" y="70" width="180" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="beat" value="Celery Beat&#xa;periodic schedules" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="api-zone" vertex="1">
+                    <mxGeometry x="30" y="240" width="150" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="dispatcher" value="Due Dispatcher&#xa;FOR UPDATE SKIP LOCKED" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="api-zone" vertex="1">
+                    <mxGeometry x="260" y="220" width="190" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="publisher" value="Outbox Publisher&#xa;retry unpublished events" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="api-zone" vertex="1">
+                    <mxGeometry x="260" y="330" width="190" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="db" value="PostgreSQL&#xa;authoritative state&#xa;wallet · withdrawal · ledger&#xa;attempt · idempotency · outbox" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="810" y="240" width="210" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="redis" value="Redis&#xa;Celery broker/results&#xa;(not financial truth)" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#f8cecc;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="845" y="510" width="160" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="worker" value="Celery Worker&#xa;thin task → service&#xa;at-least-once consumer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1120" y="410" width="190" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="gateway" value="Bank Gateway&#xa;timeout + classification&#xa;stable internal key" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="1" vertex="1">
+                    <mxGeometry x="1090" y="190" width="190" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="bank" value="Provided Flask Bank&#xa;POST /&#xa;success or temporary 503&#xa;no idempotency/status lookup" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="1420" y="240" width="190" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" value="HTTP JSON" style="edgeStyle=orthogonalEdgeStyle;rounded=0;endArrow=block;html=1;" parent="1" source="client" target="api" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="1" source="api" target="services" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="1" source="beat" target="dispatcher" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="1" source="beat" target="publisher" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5" value="transactions + locks" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="1" source="services" target="db" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e6" value="claim + outbox" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="1" source="dispatcher" target="db" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e7" value="read/update events" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="1" source="publisher" target="db" edge="1">
+                    <mxGeometry x="0.0499" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e8" value="publish task" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="1" source="publisher" target="redis" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e9" value="consume" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="1" source="redis" target="worker" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10" value="reserve / settle" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="1" source="worker" target="db" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="1" source="worker" target="gateway" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e12" value="POST / outside DB tx" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="1" source="gateway" target="bank" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="withdrawal-sequence" name="2. Withdrawal Sequence">
+        <mxGraphModel dx="1188" dy="840" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+            <root>
+                <mxCell id="s0"/>
+                <mxCell id="s1" parent="s0"/>
+                <mxCell id="st" value="Scheduled Withdrawal — Durable Delivery, Reservation, Bank Call, Settlement" style="text;html=1;fontSize=22;fontStyle=1;" parent="s1" vertex="1">
+                    <mxGeometry x="40" y="30" width="850" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="lanes" value="" style="swimlane;horizontal=0;startSize=0;html=1;" parent="s1" vertex="1">
+                    <mxGeometry x="40" y="100" width="1460" height="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="lbeat" value="Beat / Dispatcher" style="swimlane;horizontal=0;html=1;fillColor=#e1d5e7;" parent="lanes" vertex="1">
+                    <mxGeometry width="230" height="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="a1" value="1. scan due scheduled / retry_pending" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" parent="lbeat" vertex="1">
+                    <mxGeometry x="30" y="70" width="170" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="ldb" value="PostgreSQL" style="swimlane;horizontal=0;html=1;fillColor=#fff2cc;" parent="lanes" vertex="1">
+                    <mxGeometry x="230" width="300" height="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="a2" value="2. SELECT FOR UPDATE SKIP LOCKED&#xa;set queued + create OutboxEvent&#xa;COMMIT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" parent="ldb" vertex="1">
+                    <mxGeometry x="45" y="145" width="220" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="a5" value="5. lock withdrawal → wallet&#xa;available = balance - reserved&#xa;reserve + ledger entry&#xa;processing → funds_reserved&#xa;COMMIT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" parent="ldb" vertex="1">
+                    <mxGeometry x="35" y="425" width="235" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="a9" value="9. lock withdrawal → wallet&#xa;settle, release, or retain reservation&#xa;unique ledger operation&#xa;COMMIT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;" parent="ldb" vertex="1">
+                    <mxGeometry x="35" y="630" width="235" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="lpub" value="Outbox Publisher / Redis" style="swimlane;horizontal=0;html=1;fillColor=#f8cecc;" parent="lanes" vertex="1">
+                    <mxGeometry x="530" width="280" height="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="a3" value="3. lock unpublished event&#xa;publish process_withdrawal&#xa;set published_at" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;" parent="lpub" vertex="1">
+                    <mxGeometry x="40" y="255" width="200" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="lworker" value="Celery Worker" style="swimlane;horizontal=0;html=1;fillColor=#d5e8d4;" parent="lanes" vertex="1">
+                    <mxGeometry x="810" width="310" height="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="a4" value="4. claim withdrawal&#xa;queued → processing&#xa;COMMIT" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" parent="lworker" vertex="1">
+                    <mxGeometry x="55" y="345" width="200" height="75" as="geometry"/>
+                </mxCell>
+                <mxCell id="a6" value="6. record BankTransferAttempt&#xa;increment attempt_count" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" parent="lworker" vertex="1">
+                    <mxGeometry x="55" y="450" width="200" height="75" as="geometry"/>
+                </mxCell>
+                <mxCell id="a8" value="8. classify result&#xa;success / confirmed / retryable / ambiguous" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;" parent="lworker" vertex="1">
+                    <mxGeometry x="40" y="620" width="230" height="75" as="geometry"/>
+                </mxCell>
+                <mxCell id="lbank" value="Bank" style="swimlane;horizontal=0;html=1;fillColor=#ffe6cc;" parent="lanes" vertex="1">
+                    <mxGeometry x="1120" width="340" height="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="a7" value="7. POST /&#xa;NO database transaction held" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeWidth=2;" parent="lbank" vertex="1">
+                    <mxGeometry x="65" y="535" width="210" height="75" as="geometry"/>
+                </mxCell>
+                <mxCell id="n1" value="Internal effects are idempotent under duplicate delivery." style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;" parent="s1" vertex="1">
+                    <mxGeometry x="1180" y="875" width="310" height="60" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="state-machine" name="3. Withdrawal State Machine">
+        <mxGraphModel dx="1485" dy="1050" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+            <root>
+                <mxCell id="m0"/>
+                <mxCell id="m1" parent="m0"/>
+                <mxCell id="mt" value="Withdrawal State Machine" style="text;html=1;fontSize=24;fontStyle=1;" parent="m1" vertex="1">
+                    <mxGeometry x="40" y="30" width="400" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="scheduled" value="scheduled" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" parent="m1" vertex="1">
+                    <mxGeometry x="80" y="300" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="queued" value="queued" style="ellipse;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" parent="m1" vertex="1">
+                    <mxGeometry x="300" y="300" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="processing" value="processing" style="ellipse;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" parent="m1" vertex="1">
+                    <mxGeometry x="520" y="300" width="150" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="reserved" value="funds_reserved" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" parent="m1" vertex="1">
+                    <mxGeometry x="760" y="300" width="170" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="retry" value="retry_pending" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" parent="m1" vertex="1">
+                    <mxGeometry x="760" y="500" width="170" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="success" value="succeeded&#xa;TERMINAL" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" parent="m1" vertex="1">
+                    <mxGeometry x="1050" y="170" width="170" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="failed" value="failed&#xa;TERMINAL" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" parent="m1" vertex="1">
+                    <mxGeometry x="1050" y="300" width="170" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="insufficient" value="insufficient_funds&#xa;TERMINAL" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" parent="m1" vertex="1">
+                    <mxGeometry x="520" y="520" width="190" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="reconcile" value="reconciliation_required&#xa;MANUAL" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" parent="m1" vertex="1">
+                    <mxGeometry x="1040" y="500" width="210" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="me1" value="due claim + outbox" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="m1" source="scheduled" target="queued" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="me2" value="worker claim" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="m1" source="queued" target="processing" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="me3" value="reserve" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="m1" source="processing" target="reserved" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="me4" value="available &lt; amount" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" parent="m1" source="processing" target="insufficient" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="me5" value="success: debit + clear reserve" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;strokeColor=#82b366;" parent="m1" source="reserved" target="success" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="me6" value="confirmed failure: release" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;strokeColor=#b85450;" parent="m1" source="reserved" target="failed" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="me7" value="temporary / ambiguous" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;strokeColor=#d79b00;" parent="m1" source="reserved" target="retry" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="me8" value="next_retry_at due" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;dashed=1;" parent="m1" source="retry" target="reserved" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="me9" value="max attempts / unresolved" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;strokeColor=#b85450;" parent="m1" source="retry" target="reconcile" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="data-model" name="4. Persistence Model">
+        <mxGraphModel dx="2920" dy="933" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+            <root>
+                <mxCell id="d0"/>
+                <mxCell id="d1" parent="d0"/>
+                <mxCell id="dt" value="PostgreSQL Persistence Model and Integrity Boundaries" style="text;html=1;fontSize=24;fontStyle=1;" parent="d1" vertex="1">
+                    <mxGeometry x="40" y="30" width="650" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="wallet" value="Wallet&#xa;────────────&#xa;uuid UNIQUE&#xa;balance ≥ 0&#xa;reserved_balance ≥ 0&#xa;reserved_balance ≤ balance&#xa;available = balance - reserved" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" parent="d1" vertex="1">
+                    <mxGeometry x="-70" y="130" width="240" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="withdrawal" value="Withdrawal&#xa;────────────&#xa;uuid UNIQUE&#xa;wallet FK&#xa;amount &gt; 0&#xa;status + execute_at + queued_at&#xa;bank_idempotency_key UNIQUE&#xa;attempt_count + next_retry_at&#xa;failure / completion metadata" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" parent="d1" vertex="1">
+                    <mxGeometry x="430" y="130" width="280" height="270" as="geometry"/>
+                </mxCell>
+                <mxCell id="ledger" value="Transaction (ledger)&#xa;────────────&#xa;wallet FK&#xa;withdrawal FK nullable&#xa;type + operation&#xa;amount &gt; 0&#xa;balance_after&#xa;UNIQUE(withdrawal, operation)" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" parent="d1" vertex="1">
+                    <mxGeometry x="80" y="520" width="250" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="attempt" value="BankTransferAttempt&#xa;────────────&#xa;withdrawal FK&#xa;attempt_number&#xa;idempotency_key&#xa;outcome + failure_code&#xa;requested_at + completed_at&#xa;UNIQUE(withdrawal, attempt_number)" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" parent="d1" vertex="1">
+                    <mxGeometry x="440" y="520" width="280" height="220" as="geometry"/>
+                </mxCell>
+                <mxCell id="outbox" value="OutboxEvent&#xa;────────────&#xa;withdrawal FK&#xa;event_type&#xa;published_at&#xa;attempt_count&#xa;next_attempt_at + last_error&#xa;INDEX(published_at, next_attempt_at)" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" parent="d1" vertex="1">
+                    <mxGeometry x="900" y="180" width="270" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="idempotency" value="ApiIdempotency&#xa;────────────&#xa;key + operation UNIQUE&#xa;request_hash&#xa;response_status&#xa;safe response_body&#xa;created_at" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" parent="d1" vertex="1">
+                    <mxGeometry x="830" y="520" width="260" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="de1" value="1 : many" style="edgeStyle=orthogonalEdgeStyle;endArrow=ERmany;startArrow=ERone;html=1;" parent="d1" source="wallet" target="withdrawal" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="de2" value="1 : many" style="edgeStyle=orthogonalEdgeStyle;endArrow=ERmany;startArrow=ERone;html=1;" parent="d1" source="wallet" target="ledger" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="de3" value="1 : many operations" style="edgeStyle=orthogonalEdgeStyle;endArrow=ERmany;startArrow=ERone;html=1;" parent="d1" source="withdrawal" target="ledger" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="de4" value="1 : many attempts" style="edgeStyle=orthogonalEdgeStyle;endArrow=ERmany;startArrow=ERone;html=1;" parent="d1" source="withdrawal" target="attempt" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="de5" value="1 : many events" style="edgeStyle=orthogonalEdgeStyle;endArrow=ERmany;startArrow=ERone;html=1;" parent="d1" source="withdrawal" target="outbox" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="note" value="ApiIdempotency is intentionally independent: it stores replay responses for deposit and schedule operations, not a hard FK to one resource type." style="shape=note;whiteSpace=wrap;html=1;fillColor=#fff2cc;" parent="d1" vertex="1">
+                    <mxGeometry x="1170" y="520" width="300" height="110" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
 </mxfile>

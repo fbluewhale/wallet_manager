@@ -1,5 +1,7 @@
 # Wallet Service
 
+> The complete, implementation-specific guide is [docs/architecture.md](../docs/architecture.md), with an editable [Draw.io diagram](../docs/wallet-architecture.drawio).
+
 A Django wallet service using integer minor units for every monetary amount.
 
 ## Architecture
@@ -40,9 +42,9 @@ docker compose logs -f beat
 
 ## Automatic scheduling
 
-The database is the source of truth. Beat periodically finds due `scheduled` records, claims a bounded batch by moving them to `queued`, and publishes a task after that transaction commits. Workers accept `scheduled`/`queued` work, transition it to `processing`, and the existing terminal state check prevents a duplicated task from debiting twice.
+The database is the source of truth. Beat periodically finds due `scheduled` records, claims a bounded batch by moving them to `queued`, and writes a durable outbox event in the same transaction. A separate periodic publisher sends outbox events to Celery and records `published_at`. Workers accept `scheduled`/`queued` work, transition it to `processing`, and terminal-state checks prevent a duplicated task from debiting twice.
 
-If a process dies after the database commit but before task publishing, the next scan recovers `queued` records older than `WITHDRAWAL_MAX_QUEUED_AGE_SECONDS` and dispatches them again.
+If a process dies after the database commit but before task publishing, the unpublished outbox event remains for a later publisher. Stale `queued` records older than `WITHDRAWAL_MAX_QUEUED_AGE_SECONDS` are recovered for dispatch.
 
 ## Consistency and reservations
 
