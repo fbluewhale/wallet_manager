@@ -7,6 +7,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from django.db.models import Q
 from wallets.models import Withdrawal
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ def dispatch_due_withdrawals(now=None, enqueue=None):
     with transaction.atomic():
         due = list(
             Withdrawal.objects.select_for_update(skip_locked=True)
-            .filter(status=Withdrawal.Status.SCHEDULED, execute_at__lte=now)
+            .filter(Q(status=Withdrawal.Status.SCHEDULED, execute_at__lte=now) | Q(status=Withdrawal.Status.RETRY_PENDING, next_retry_at__lte=now))
             .order_by("execute_at")[:settings.WITHDRAWAL_DISPATCH_BATCH_SIZE]
         )
         if due:

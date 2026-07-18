@@ -51,6 +51,14 @@ The database enforces `balance >= 0`, `reserved_balance >= 0`, and `reserved_bal
 
 The test suite exercises ledger idempotency and competing withdrawals; run PostgreSQL-backed integration checks with `docker compose up --build` and `docker compose exec wallet python manage.py test wallets`.
 
+## Bank failures and retries
+
+The provided bank exposes only `POST /` and replies with JSON success (`data=success`, `status=200`) or a temporary failure (`data=failed`, `status=503`). It accepts no idempotency key, has no transfer ID or status lookup, and its random failure simulation is not deterministic.
+
+Each withdrawal nevertheless has one immutable `bank_idempotency_key`; every internal retry and append-only `BankTransferAttempt` reuses it. Confirmed failures release reservations. Temporary failures, connection failures, malformed responses, and timeouts keep funds reserved and enter `retry_pending` with bounded exponential backoff (`BANK_RETRY_BASE_SECONDS`, `BANK_RETRY_MAX_SECONDS`, `BANK_MAX_RETRIES`). Exhausted attempts enter `reconciliation_required`.
+
+Because the supplied bank does not honor an idempotency key or offer status lookup, an ambiguous timeout after transmission cannot prove whether it paid. Funds remain reserved and manual reconciliation is required; automatic retry may still risk a duplicate external payout.
+
 ## Milestone 2 limitations
 
 There is no transactional outbox, retry policy, reservation balance, API idempotency, crash recovery, or ambiguous network-result reconciliation. Multi-dispatcher claim handling is intentionally basic; workers still serialize on the withdrawal row and terminal statuses prevent a second debit.

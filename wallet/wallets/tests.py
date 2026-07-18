@@ -22,6 +22,16 @@ class FakeBankClient:
         return self.result
 
 
+class SequenceBankClient(FakeBankClient):
+    def __init__(self, results):
+        self.results = iter(results)
+        self.amounts = []
+
+    def deposit(self, amount):
+        self.amounts.append(amount)
+        return next(self.results)
+
+
 class WalletApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -67,7 +77,7 @@ class WithdrawalExecutionTests(TestCase):
 
     def test_successful_execution_deducts_and_records_history(self):
         withdrawal = self.due_withdrawal()
-        client = FakeBankClient(BankResult(True, reference="bank-1"))
+        client = FakeBankClient(BankResult("success", reference="bank-1"))
         execute_withdrawal(withdrawal.uuid, client)
         self.wallet.refresh_from_db()
         withdrawal.refresh_from_db()
@@ -79,7 +89,7 @@ class WithdrawalExecutionTests(TestCase):
 
     def test_insufficient_funds_does_not_call_bank_or_make_balance_negative(self):
         withdrawal = self.due_withdrawal(amount=101)
-        client = FakeBankClient(BankResult(True))
+        client = FakeBankClient(BankResult("success"))
         execute_withdrawal(withdrawal.uuid, client)
         self.wallet.refresh_from_db()
         withdrawal.refresh_from_db()
@@ -88,7 +98,7 @@ class WithdrawalExecutionTests(TestCase):
 
     def test_confirmed_bank_failure_keeps_balance(self):
         withdrawal = self.due_withdrawal()
-        execute_withdrawal(withdrawal.uuid, FakeBankClient(BankResult(False, code="bank_rejected", message="failed")))
+        execute_withdrawal(withdrawal.uuid, FakeBankClient(BankResult("confirmed_failure", code="bank_rejected", message="failed")))
         self.wallet.refresh_from_db()
         withdrawal.refresh_from_db()
         self.assertEqual(self.wallet.balance, 100)
@@ -103,7 +113,7 @@ class WithdrawalExecutionTests(TestCase):
 
     def test_duplicate_task_execution_does_not_debit_twice(self):
         withdrawal = self.due_withdrawal()
-        bank = FakeBankClient(BankResult(True))
+        bank = FakeBankClient(BankResult("success"))
         execute_withdrawal(withdrawal.uuid, bank)
         execute_withdrawal(withdrawal.uuid, bank)
         self.wallet.refresh_from_db()
@@ -113,7 +123,7 @@ class WithdrawalExecutionTests(TestCase):
     def test_competing_withdrawals_reserve_only_available_funds(self):
         first = self.due_withdrawal(amount=80)
         second = self.due_withdrawal(amount=80)
-        bank = FakeBankClient(BankResult(True))
+        bank = FakeBankClient(BankResult("success"))
         execute_withdrawal(first.uuid, bank)
         execute_withdrawal(second.uuid, bank)
         self.wallet.refresh_from_db()
@@ -124,10 +134,24 @@ class WithdrawalExecutionTests(TestCase):
 
     def test_bank_failure_releases_reservation(self):
         withdrawal = self.due_withdrawal()
-        execute_withdrawal(withdrawal.uuid, FakeBankClient(BankResult(False, code="declined")))
+        execute_withdrawal(withdrawal.uuid, FakeBankClient(BankResult("confirmed_failure", code="declined")))
         self.wallet.refresh_from_db()
         self.assertEqual((self.wallet.balance, self.wallet.reserved_balance), (100, 0))
         self.assertTrue(Transaction.objects.filter(withdrawal=withdrawal, operation="release").exists())
+
+    def test_retry_keeps_reservation_and_reuses_stable_key(self):
+        withdrawal = self.due_withdrawal()
+        bank = SequenceBankClient([BankResult("retryable_failure", code="bank_unavailable"), BankResult("success")])
+        execute_withdrawal(withdrawal.uuid, bank)
+        withdrawal.refresh_from_db()
+        self.wallet.refresh_from_db()
+        self.assertEqual((withdrawal.status, self.wallet.reserved_balance), (Withdrawal.Status.RETRY_PENDING, 40))
+        withdrawal.next_retry_at = timezone.now() - timedelta(seconds=1)
+        withdrawal.save(update_fields=["next_retry_at"])
+        execute_withdrawal(withdrawal.uuid, bank)
+        withdrawal.refresh_from_db()
+        self.assertEqual(withdrawal.status, Withdrawal.Status.SUCCEEDED)
+        self.assertEqual(set(withdrawal.bank_attempts.values_list("idempotency_key", flat=True)), {withdrawal.bank_idempotency_key})
 
 
 class WithdrawalDispatcherTests(TestCase):
