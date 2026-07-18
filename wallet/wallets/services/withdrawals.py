@@ -27,7 +27,7 @@ def execute_withdrawal(withdrawal_uuid, bank_client=None):
         except Withdrawal.DoesNotExist as exc:
             raise WalletServiceError("withdrawal_not_found", "Withdrawal does not exist.") from exc
 
-        if withdrawal.status != Withdrawal.Status.SCHEDULED:
+        if withdrawal.status not in (Withdrawal.Status.SCHEDULED, Withdrawal.Status.QUEUED):
             return withdrawal
         if withdrawal.execute_at > timezone.now():
             raise WalletServiceError("withdrawal_not_due", "Withdrawal is not due yet.")

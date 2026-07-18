@@ -36,6 +36,7 @@ class Wallet(models.Model):
 class Withdrawal(models.Model):
     class Status(models.TextChoices):
         SCHEDULED = "scheduled", "Scheduled"
+        QUEUED = "queued", "Queued"
         PROCESSING = "processing", "Processing"
         SUCCEEDED = "succeeded", "Succeeded"
         FAILED = "failed", "Failed"
@@ -46,6 +47,7 @@ class Withdrawal(models.Model):
     amount = models.BigIntegerField()
     execute_at = models.DateTimeField()
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.SCHEDULED)
+    queued_at = models.DateTimeField(null=True, blank=True)
     failure_code = models.CharField(max_length=64, blank=True)
     failure_message = models.TextField(blank=True)
     bank_reference = models.CharField(max_length=128, blank=True)
@@ -55,7 +57,7 @@ class Withdrawal(models.Model):
 
     class Meta:
         constraints = [models.CheckConstraint(check=Q(amount__gt=0), name="withdrawal_amount_positive")]
-        indexes = [models.Index(fields=["status", "execute_at"])]
+        indexes = [models.Index(fields=["status", "execute_at"]), models.Index(fields=["status", "queued_at"])]
 
     def complete(self, status, *, failure_code="", failure_message="", bank_reference=""):
         self.status = status

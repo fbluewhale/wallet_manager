@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -7,6 +8,7 @@ from rest_framework.test import APIClient
 from banking.client import BankResult
 from wallets.models import Transaction, Wallet, Withdrawal
 from wallets.services.deposits import deposit
+from wallets.services.dispatch import dispatch_due_withdrawals, recover_stale_queued_withdrawals
 from wallets.services.withdrawals import execute_withdrawal
 
 
@@ -98,3 +100,72 @@ class WithdrawalExecutionTests(TestCase):
         response = APIClient().get(f"/wallets/withdrawals/{withdrawal.uuid}/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["uuid"], str(withdrawal.uuid))
+
+    def test_duplicate_task_execution_does_not_debit_twice(self):
+        withdrawal = self.due_withdrawal()
+        bank = FakeBankClient(BankResult(True))
+        execute_withdrawal(withdrawal.uuid, bank)
+        execute_withdrawal(withdrawal.uuid, bank)
+        self.wallet.refresh_from_db()
+        self.assertEqual((self.wallet.balance, bank.amounts), (60, [40]))
+
+
+class WithdrawalDispatcherTests(TestCase):
+    def setUp(self):
+        self.wallet = Wallet.objects.create(balance=100)
+        self.now = timezone.now()
+
+    def withdrawal(self, *, execute_at, status=Withdrawal.Status.SCHEDULED, queued_at=None):
+        return Withdrawal.objects.create(
+            wallet=self.wallet, amount=10, execute_at=execute_at, status=status, queued_at=queued_at
+        )
+
+    def test_dispatcher_queues_due_withdrawals_once(self):
+        due = self.withdrawal(execute_at=self.now - timedelta(seconds=1))
+        enqueued = []
+        with self.captureOnCommitCallbacks(execute=True):
+            count = dispatch_due_withdrawals(now=self.now, enqueue=enqueued.append)
+        due.refresh_from_db()
+        self.assertEqual((count, due.status, enqueued), (1, Withdrawal.Status.QUEUED, [str(due.uuid)]))
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(dispatch_due_withdrawals(now=self.now, enqueue=enqueued.append), 0)
+        self.assertEqual(enqueued, [str(due.uuid)])
+
+    def test_dispatcher_ignores_future_and_completed_withdrawals(self):
+        future = self.withdrawal(execute_at=self.now + timedelta(minutes=1))
+        completed = self.withdrawal(execute_at=self.now - timedelta(seconds=1), status=Withdrawal.Status.SUCCEEDED)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(dispatch_due_withdrawals(now=self.now, enqueue=lambda _: None), 0)
+        future.refresh_from_db()
+        completed.refresh_from_db()
+        self.assertEqual((future.status, completed.status), (Withdrawal.Status.SCHEDULED, Withdrawal.Status.SUCCEEDED))
+
+    @patch("wallets.services.dispatch.settings.WITHDRAWAL_DISPATCH_BATCH_SIZE", 2)
+    def test_dispatcher_respects_batch_size(self):
+        for _ in range(3):
+            self.withdrawal(execute_at=self.now - timedelta(seconds=1))
+        enqueued = []
+        with self.captureOnCommitCallbacks(execute=True):
+            count = dispatch_due_withdrawals(now=self.now, enqueue=enqueued.append)
+        self.assertEqual((count, len(enqueued)), (2, 2))
+        self.assertEqual(Withdrawal.objects.filter(status=Withdrawal.Status.QUEUED).count(), 2)
+
+    @patch("wallets.services.dispatch.settings.WITHDRAWAL_MAX_QUEUED_AGE_SECONDS", 60)
+    def test_stale_queued_withdrawal_is_recovered(self):
+        stale = self.withdrawal(
+            execute_at=self.now - timedelta(minutes=2),
+            status=Withdrawal.Status.QUEUED,
+            queued_at=self.now - timedelta(minutes=2),
+        )
+        self.assertEqual(recover_stale_queued_withdrawals(now=self.now), 1)
+        stale.refresh_from_db()
+        self.assertEqual((stale.status, stale.queued_at), (Withdrawal.Status.SCHEDULED, None))
+
+    @patch("wallets.tasks.execute_withdrawal")
+    def test_celery_task_invokes_application_service(self, execute):
+        from wallets.tasks import process_withdrawal
+
+        withdrawal = self.withdrawal(execute_at=self.now - timedelta(seconds=1))
+        execute.return_value = withdrawal
+        self.assertEqual(process_withdrawal.run(str(withdrawal.uuid)), Withdrawal.Status.SCHEDULED)
+        execute.assert_called_once_with(str(withdrawal.uuid))

@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 
 from pathlib import Path
 import os
+from urllib.parse import urlparse
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -76,12 +77,21 @@ WSGI_APPLICATION = 'wallet.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    database_url = urlparse(DATABASE_URL)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": database_url.path.lstrip("/"),
+            "USER": database_url.username,
+            "PASSWORD": database_url.password,
+            "HOST": database_url.hostname,
+            "PORT": database_url.port or 5432,
+        }
     }
-}
+else:
+    DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
 
 
 # Password validation
@@ -135,3 +145,12 @@ REST_FRAMEWORK = {
 
 BANK_SERVICE_URL = os.getenv("BANK_SERVICE_URL", "http://localhost:8010/")
 BANK_SERVICE_TIMEOUT_SECONDS = float(os.getenv("BANK_SERVICE_TIMEOUT_SECONDS", "5"))
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+DISPATCHER_INTERVAL_SECONDS = int(os.getenv("DISPATCHER_INTERVAL_SECONDS", "5"))
+WITHDRAWAL_DISPATCH_BATCH_SIZE = int(os.getenv("WITHDRAWAL_DISPATCH_BATCH_SIZE", "50"))
+WITHDRAWAL_MAX_QUEUED_AGE_SECONDS = int(os.getenv("WITHDRAWAL_MAX_QUEUED_AGE_SECONDS", "60"))
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_TIMEZONE = TIME_ZONE

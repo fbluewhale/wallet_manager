@@ -15,5 +15,7 @@ __pycache__/
 .mypy_cache/
 .coverage
 htmlcov/
+celerybeat-schedule
+celerybeat-schedule.*
 .idea/
 .vscode/
