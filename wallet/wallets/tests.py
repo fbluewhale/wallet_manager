@@ -108,6 +108,26 @@ class WithdrawalExecutionTests(TestCase):
         execute_withdrawal(withdrawal.uuid, bank)
         self.wallet.refresh_from_db()
         self.assertEqual((self.wallet.balance, bank.amounts), (60, [40]))
+        self.assertEqual(Transaction.objects.filter(withdrawal=withdrawal, operation="complete").count(), 1)
+
+    def test_competing_withdrawals_reserve_only_available_funds(self):
+        first = self.due_withdrawal(amount=80)
+        second = self.due_withdrawal(amount=80)
+        bank = FakeBankClient(BankResult(True))
+        execute_withdrawal(first.uuid, bank)
+        execute_withdrawal(second.uuid, bank)
+        self.wallet.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual((self.wallet.balance, self.wallet.reserved_balance), (20, 0))
+        self.assertEqual(second.status, Withdrawal.Status.INSUFFICIENT_FUNDS)
+        self.assertEqual(Transaction.objects.filter(transaction_type=Transaction.Type.RESERVATION).count(), 1)
+
+    def test_bank_failure_releases_reservation(self):
+        withdrawal = self.due_withdrawal()
+        execute_withdrawal(withdrawal.uuid, FakeBankClient(BankResult(False, code="declined")))
+        self.wallet.refresh_from_db()
+        self.assertEqual((self.wallet.balance, self.wallet.reserved_balance), (100, 0))
+        self.assertTrue(Transaction.objects.filter(withdrawal=withdrawal, operation="release").exists())
 
 
 class WithdrawalDispatcherTests(TestCase):

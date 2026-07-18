@@ -19,5 +19,6 @@ def deposit(wallet_uuid, amount):
             transaction_type=Transaction.Type.DEPOSIT,
             amount=amount,
             balance_after=wallet.balance,
+            operation="deposit",
         )
     return wallet

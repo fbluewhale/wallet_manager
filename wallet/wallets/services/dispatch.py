@@ -34,7 +34,7 @@ def dispatch_due_withdrawals(now=None, enqueue=None):
 
     with transaction.atomic():
         due = list(
-            Withdrawal.objects.select_for_update()
+            Withdrawal.objects.select_for_update(skip_locked=True)
             .filter(status=Withdrawal.Status.SCHEDULED, execute_at__lte=now)
             .order_by("execute_at")[:settings.WITHDRAWAL_DISPATCH_BATCH_SIZE]
         )

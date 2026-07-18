@@ -43,6 +43,14 @@ The database is the source of truth. Beat periodically finds due `scheduled` rec
 
 If a process dies after the database commit but before task publishing, the next scan recovers `queued` records older than `WITHDRAWAL_MAX_QUEUED_AGE_SECONDS` and dispatches them again.
 
+## Consistency and reservations
+
+`available_balance = balance - reserved_balance`. At execution, the worker locks the withdrawal and then its wallet, reserves available funds and records an immutable reservation entry, then commits. The bank request occurs outside every database transaction. A second short transaction either settles the reservation (reducing both balances) or releases it (reducing `reserved_balance` only).
+
+The database enforces `balance >= 0`, `reserved_balance >= 0`, and `reserved_balance <= balance`. Every flow uses the same lock order: withdrawal, wallet, ledger. Dispatcher claims use PostgreSQL `FOR UPDATE SKIP LOCKED`, so separate scheduler instances can claim different rows in parallel.
+
+The test suite exercises ledger idempotency and competing withdrawals; run PostgreSQL-backed integration checks with `docker compose up --build` and `docker compose exec wallet python manage.py test wallets`.
+
 ## Milestone 2 limitations
 
 There is no transactional outbox, retry policy, reservation balance, API idempotency, crash recovery, or ambiguous network-result reconciliation. Multi-dispatcher claim handling is intentionally basic; workers still serialize on the withdrawal row and terminal statuses prevent a second debit.

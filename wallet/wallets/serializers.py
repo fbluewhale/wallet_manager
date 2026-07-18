@@ -5,10 +5,12 @@ from wallets.models import Transaction, Wallet, Withdrawal
 
 
 class WalletSerializer(serializers.ModelSerializer):
+    available_balance = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Wallet
-        fields = ("uuid", "balance", "created_at", "updated_at")
-        read_only_fields = ("uuid", "balance")
+        fields = ("uuid", "balance", "reserved_balance", "available_balance", "created_at", "updated_at")
+        read_only_fields = ("uuid", "balance", "reserved_balance", "available_balance")
 
 
 class DepositSerializer(serializers.Serializer):
