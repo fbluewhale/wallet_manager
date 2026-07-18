@@ -3,7 +3,7 @@ import json
 
 from django.db import IntegrityError, transaction
 from rest_framework import status
-from rest_framework.generics import CreateAPIView, RetrieveAPIView, RetrieveUpdateAPIView
+from rest_framework.generics import CreateAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 

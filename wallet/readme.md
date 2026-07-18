@@ -27,6 +27,7 @@ Run migrations and tests manually:
 .venv/bin/python wallet/manage.py process_due_withdrawals
 docker compose logs -f worker
 docker compose logs -f beat
+.venv/bin/python wallet/manage.py reconcile_withdrawals
 ```
 
 ## API
@@ -58,6 +59,14 @@ The provided bank exposes only `POST /` and replies with JSON success (`data=suc
 Each withdrawal nevertheless has one immutable `bank_idempotency_key`; every internal retry and append-only `BankTransferAttempt` reuses it. Confirmed failures release reservations. Temporary failures, connection failures, malformed responses, and timeouts keep funds reserved and enter `retry_pending` with bounded exponential backoff (`BANK_RETRY_BASE_SECONDS`, `BANK_RETRY_MAX_SECONDS`, `BANK_MAX_RETRIES`). Exhausted attempts enter `reconciliation_required`.
 
 Because the supplied bank does not honor an idempotency key or offer status lookup, an ambiguous timeout after transmission cannot prove whether it paid. Funds remain reserved and manual reconciliation is required; automatic retry may still risk a duplicate external payout.
+
+## Configuration and operations
+
+Copy `.env.example` to `.env` for local configuration. Production requires `DJANGO_SECRET_KEY` and defaults `DJANGO_DEBUG` to false. Configure database, Redis, bank URL/timeouts, scheduler batches, retry limits, allowed hosts, request size, and log level only through environment variables.
+
+`reconcile_withdrawals` lists `reconciliation_required` records for manual handling. The supplied bank cannot confirm remote status, so the command deliberately does not mutate unresolved funds.
+
+See [the detailed architecture guide](../docs/architecture.md) and its editable Draw.io diagram for component and flow views.
 
 ## Milestone 2 limitations
 

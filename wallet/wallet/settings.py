@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 from urllib.parse import urlparse
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -21,13 +22,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-89ufi$15chz5o&js3*qv9#_=!q2*-iju27$(#me76)=67o&p5m'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
+DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    if not DEBUG and "test" not in sys.argv:
+        raise RuntimeError("DJANGO_SECRET_KEY is required when DJANGO_DEBUG is false.")
+    SECRET_KEY = "development-only-secret-key"
+ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_MAX_REQUEST_BYTES", "1048576"))
 
 
 # Application definition
@@ -157,3 +159,5 @@ CELERY_TIMEZONE = TIME_ZONE
 BANK_RETRY_BASE_SECONDS = int(os.getenv("BANK_RETRY_BASE_SECONDS", "5"))
 BANK_RETRY_MAX_SECONDS = int(os.getenv("BANK_RETRY_MAX_SECONDS", "300"))
 BANK_MAX_RETRIES = int(os.getenv("BANK_MAX_RETRIES", "5"))
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+LOGGING = {"version": 1, "disable_existing_loggers": False, "handlers": {"console": {"class": "logging.StreamHandler"}}, "root": {"handlers": ["console"], "level": LOG_LEVEL}}
