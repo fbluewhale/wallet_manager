@@ -115,3 +115,28 @@ class BankTransferAttempt(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["withdrawal", "attempt_number"], name="unique_bank_attempt_number")]
+
+
+class ApiIdempotency(models.Model):
+    key = models.CharField(max_length=255)
+    operation = models.CharField(max_length=32)
+    request_hash = models.CharField(max_length=64)
+    response_status = models.PositiveSmallIntegerField()
+    response_body = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["key", "operation"], name="unique_api_idempotency_key")]
+
+
+class OutboxEvent(models.Model):
+    withdrawal = models.ForeignKey(Withdrawal, on_delete=models.CASCADE, related_name="outbox_events")
+    event_type = models.CharField(max_length=64, default="process_withdrawal")
+    created_at = models.DateTimeField(auto_now_add=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    attempt_count = models.PositiveIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["published_at", "next_attempt_at"])]

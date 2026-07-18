@@ -14,4 +14,5 @@ app.conf.beat_schedule = {
         "task": "wallets.dispatch_due_withdrawals",
         "schedule": timedelta(seconds=settings.DISPATCHER_INTERVAL_SECONDS),
     }
+    ,"publish-withdrawal-outbox": {"task": "wallets.publish_outbox", "schedule": timedelta(seconds=settings.DISPATCHER_INTERVAL_SECONDS)}
 }

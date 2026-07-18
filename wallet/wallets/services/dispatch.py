@@ -8,7 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from django.db.models import Q
-from wallets.models import Withdrawal
+from wallets.models import OutboxEvent, Withdrawal
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +29,6 @@ def dispatch_due_withdrawals(now=None, enqueue=None):
     now = now or timezone.now()
     logger.info("withdrawal_dispatcher_scan_started")
     recover_stale_queued_withdrawals(now)
-    if enqueue is None:
-        from wallets.tasks import process_withdrawal
-        enqueue = process_withdrawal.delay
-
     with transaction.atomic():
         due = list(
             Withdrawal.objects.select_for_update(skip_locked=True)
@@ -45,6 +41,25 @@ def dispatch_due_withdrawals(now=None, enqueue=None):
             withdrawal.status = Withdrawal.Status.QUEUED
             withdrawal.queued_at = now
             withdrawal.save(update_fields=["status", "queued_at", "updated_at"])
-            transaction.on_commit(lambda withdrawal_uuid=str(withdrawal.uuid): enqueue(withdrawal_uuid))
+            OutboxEvent.objects.create(withdrawal=withdrawal)
             logger.info("withdrawal_queued", extra={"withdrawal_id": str(withdrawal.uuid), "wallet_id": withdrawal.wallet_id})
     return len(due)
+
+
+def publish_outbox_events(publish=None, now=None):
+    now = now or timezone.now()
+    if publish is None:
+        from wallets.tasks import process_withdrawal
+        publish = process_withdrawal.delay
+    with transaction.atomic():
+        events = list(OutboxEvent.objects.select_for_update(skip_locked=True).filter(published_at__isnull=True).filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now))[:settings.WITHDRAWAL_DISPATCH_BATCH_SIZE])
+        for event in events:
+            try:
+                publish(str(event.withdrawal.uuid))
+                event.published_at = now
+            except Exception as exc:
+                event.attempt_count += 1
+                event.next_attempt_at = now + timedelta(seconds=settings.BANK_RETRY_BASE_SECONDS)
+                event.last_error = str(exc)
+            event.save()
+    return len(events)

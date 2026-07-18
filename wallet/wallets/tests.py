@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from banking.client import BankResult
-from wallets.models import Transaction, Wallet, Withdrawal
+from wallets.models import OutboxEvent, Transaction, Wallet, Withdrawal
 from wallets.services.deposits import deposit
 from wallets.services.dispatch import dispatch_due_withdrawals, recover_stale_queued_withdrawals
 from wallets.services.withdrawals import execute_withdrawal
@@ -55,6 +55,19 @@ class WalletApiTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.wallet.refresh_from_db()
         self.assertEqual(self.wallet.balance, 0)
+
+    def test_deposit_idempotency_replays_original_response(self):
+        headers = {"HTTP_IDEMPOTENCY_KEY": "deposit-1"}
+        first = self.client.post(f"/wallets/{self.wallet.uuid}/deposit", {"amount": 10}, format="json", **headers)
+        second = self.client.post(f"/wallets/{self.wallet.uuid}/deposit", {"amount": 10}, format="json", **headers)
+        self.wallet.refresh_from_db()
+        self.assertEqual((first.data, second.data, self.wallet.balance), (first.data, first.data, 10))
+
+    def test_idempotency_key_conflicts_for_different_payload(self):
+        headers = {"HTTP_IDEMPOTENCY_KEY": "deposit-conflict"}
+        self.client.post(f"/wallets/{self.wallet.uuid}/deposit", {"amount": 10}, format="json", **headers)
+        response = self.client.post(f"/wallets/{self.wallet.uuid}/deposit", {"amount": 11}, format="json", **headers)
+        self.assertEqual(response.status_code, 409)
 
     def test_schedules_future_withdrawal_without_current_funds(self):
         execute_at = timezone.now() + timedelta(hours=1)
@@ -170,10 +183,11 @@ class WithdrawalDispatcherTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             count = dispatch_due_withdrawals(now=self.now, enqueue=enqueued.append)
         due.refresh_from_db()
-        self.assertEqual((count, due.status, enqueued), (1, Withdrawal.Status.QUEUED, [str(due.uuid)]))
+        self.assertEqual((count, due.status, enqueued), (1, Withdrawal.Status.QUEUED, []))
+        self.assertTrue(OutboxEvent.objects.filter(withdrawal=due).exists())
         with self.captureOnCommitCallbacks(execute=True):
             self.assertEqual(dispatch_due_withdrawals(now=self.now, enqueue=enqueued.append), 0)
-        self.assertEqual(enqueued, [str(due.uuid)])
+        self.assertEqual(enqueued, [])
 
     def test_dispatcher_ignores_future_and_completed_withdrawals(self):
         future = self.withdrawal(execute_at=self.now + timedelta(minutes=1))
@@ -191,7 +205,7 @@ class WithdrawalDispatcherTests(TestCase):
         enqueued = []
         with self.captureOnCommitCallbacks(execute=True):
             count = dispatch_due_withdrawals(now=self.now, enqueue=enqueued.append)
-        self.assertEqual((count, len(enqueued)), (2, 2))
+        self.assertEqual((count, len(enqueued)), (2, 0))
         self.assertEqual(Withdrawal.objects.filter(status=Withdrawal.Status.QUEUED).count(), 2)
 
     @patch("wallets.services.dispatch.settings.WITHDRAWAL_MAX_QUEUED_AGE_SECONDS", 60)
